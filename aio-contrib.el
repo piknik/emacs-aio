@@ -78,11 +78,34 @@ The result is a plist with the following keys:
     (prog1 promise
       (hashcash-generate-payment-async str val cb))))
 
-(aio-defun aio-accept-process-output (process &optional seconds just-this-one)
-  "Like `accept-process-output' but delivered by a promise.
+(aio-defun aio-accept-process-output (process &optional seconds just-this-one max-wait-time)
+  "Like `accept-process-output' but delivered by a promise, with
+extra logic to allow cancellability in the case of a hanged
+process.
 
-When JUST-THIS-ONE is non-nil, it is always used as 't"
-  (accept-process-output process seconds nil (when just-this-one t)))
+When JUST-THIS-ONE is non-nil, it is always used as 't
+MAX-WAIT-TIME is a floating-point value specifying the number of
+seconds to wait between calls to `accept-process-output'"
+  (let* ((max-wait-time (or max-wait-time 1.0))
+	 (start-time (car (time-convert nil 1000)))
+	 (time-difference 0)
+	 result)
+    (unless
+	(with-local-quit
+	  (while (and (not (aio-promise-cancelled-p aio-current-promise))
+		      (or (null seconds)
+			  (> seconds time-difference)))
+	    (setf result
+		  (accept-process-output
+		   process
+		   (if seconds
+		       (min (- seconds time-difference) max-wait-time)
+		     max-wait-time)
+		   nil (when just-this-one t)))
+	    (setf time-difference
+		  (/ (- (car (time-convert nil 1000)) start-time) 1000.0))))
+      (signal 'quit nil))
+    result))
 
 (provide 'aio-contrib)
 
