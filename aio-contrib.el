@@ -93,6 +93,7 @@ seconds to wait between calls to `accept-process-output'"
     (unless
 	(with-local-quit
 	  (while (and (not (aio-promise-cancelled-p aio-current-promise))
+		      (null result)
 		      (or (null seconds)
 			  (> seconds time-difference)))
 	    (setf result
