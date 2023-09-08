@@ -37,14 +37,18 @@
 (define-error 'aio-cancel "Promise was canceled")
 (define-error 'aio-timeout "Timeout was reached")
 
+(defvar aio-current-promise nil
+  "The promise that the current async function/lambda is operating
+under")
+
 (defun aio-promise ()
   "Create a new promise object."
-  (record 'aio-promise nil ()))
+  (record 'aio-promise nil () nil))
 
 (defsubst aio-promise-p (object)
   "Return non-nil if OBJECT is a promise."
   (and (eq 'aio-promise (type-of object))
-       (= 3 (length object))))
+       (= 4 (length object))))
 
 (defsubst aio-result (promise)
   "Return the result of PROMISE, or nil if it is unresolved.
@@ -53,6 +57,14 @@ Promise results are wrapped in a function.  The result must be
 called (e.g. `funcall') in order to retrieve the value."
   (cl-check-type promise aio-promise)
   (aref promise 1))
+
+(defsubst aio-promise-cancelled-p (promise)
+  "Return non-nil if PROMISE is cancelled.
+
+When non-nil, the result is a list corresponding to the arguments
+for `signal'"
+  (cl-check-type promise aio-promise)
+  (aref promise 3))
 
 (defun aio-listen (promise callback)
   "Add CALLBACK to PROMISE.
@@ -104,7 +116,9 @@ promise and rethrown in the promise's listeners."
   (cl-assert (eq lexical-binding t))
   `(aio-resolve ,promise
                 (condition-case error
-                    (let ((result ,(macroexp-progn body)))
+                    (let ((result
+			   (let ((aio-current-promise ,promise))
+			     ,@body)))
                       (lambda () result))
                   (error (lambda ()
                            (signal (car error) (cdr error)))))))
@@ -120,7 +134,9 @@ async functions using this macro.
 
 This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
-  `(funcall (iter-yield ,expr)))
+  `(let ((result (funcall (iter-yield ,expr))))
+     (when-let* ((signal-args (aio-promise-cancelled-p aio-current-promise)))
+       (signal (car signal-args) (cdr signal-args)))))
 
 (defmacro aio-lambda (arglist &rest body)
   "Like `lambda', but defines an async function.
@@ -189,10 +205,10 @@ ARGLIST and BODY."
 (defun aio-cancel (promise &optional reason)
   "Attempt to cancel PROMISE, returning non-nil if successful.
 
-All awaiters will receive an `aio-cancel' signal.  The actual
-underlying asynchronous operation will not actually be canceled.
+All awaiters will receive an `aio-cancel' signal.
 Optional argument REASON is used as error data for the signal."
   (unless (aio-result promise)
+    (setf (aref promise 3) (list 'aio-cancel reason))
     (aio-resolve promise (lambda () (signal 'aio-cancel reason)))))
 
 (defmacro aio-with-async (&rest body)
