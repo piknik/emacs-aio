@@ -31,6 +31,7 @@
 (require 'generator)
 (require 'macroexp)
 (require 'rx)
+(require 'iter2)
 
 ;; Register new error types
 (define-error 'aio-cancel "Promise was canceled")
@@ -142,7 +143,7 @@ ARGLIST and BODY."
     `(lambda (&rest ,args)
        ,@(car split-body)
        (let* ((,promise (aio-promise))
-              (iter (apply (iter-lambda ,arglist
+              (iter (apply (iter2-lambda ,arglist
                              (aio-with-promise ,promise
                                ,@(cdr split-body)))
                            ,args)))
