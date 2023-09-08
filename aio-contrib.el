@@ -11,10 +11,10 @@
 ;;; Code:
 
 (require 'aio)
-(require 'elfeed)
+(require 'elfeed nil t)
 (require 'filenotify)
 (require 'hashcash)
-(require 'skewer-mode)
+(require 'skewer-mode nil t)
 
 ;; Note: Threads are too broken to be useful in at least Emacs 26.1.
 ;; So, by extension, this function isn't useful either, which is why
