@@ -78,6 +78,12 @@ The result is a plist with the following keys:
     (prog1 promise
       (hashcash-generate-payment-async str val cb))))
 
+(aio-defun aio-accept-process-output (process &optional seconds just-this-one)
+  "Like `accept-process-output' but delivered by a promise.
+
+When JUST-THIS-ONE is non-nil, it is always used as 't"
+  (accept-process-output process seconds nil (when just-this-one t)))
+
 (provide 'aio-contrib)
 
 ;;; aio-contrib.el ends here
