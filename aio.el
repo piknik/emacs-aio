@@ -138,7 +138,8 @@ This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
   `(let ((result (funcall (iter-yield ,expr))))
      (when-let* ((signal-args (aio-promise-cancelled-p aio-current-promise)))
-       (signal (car signal-args) (cdr signal-args)))))
+       (signal (car signal-args) (cdr signal-args)))
+     result))
 
 (defmacro aio-lambda (arglist &rest body)
   "Like `lambda', but defines an async function.
