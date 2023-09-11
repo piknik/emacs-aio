@@ -105,7 +105,8 @@ seconds to wait between calls to `accept-process-output'"
 		     max-wait-time)
 		   nil (when just-this-one t)))
 	    (setf time-difference
-		  (/ (- (car (time-convert nil 1000)) start-time) 1000.0))))
+		  (/ (- (car (time-convert nil 1000)) start-time) 1000.0)))
+	  t)
       (signal 'quit nil))
     result))
 
