@@ -445,7 +445,7 @@ SELECT is created with `aio-make-select'."
   (cl-loop for key being the hash-keys of (aref select 1)
            collect key))
 
-(defun aio-select (select)
+(defun aio-select (select &optional vanquish)
   "Return a promise that resolves when any promise in SELECT resolves.
 
 SELECT is created with `aio-make-select'.  This function is
@@ -454,17 +454,29 @@ returns immediately with that promise.  Promises returned by
 `aio-select' are automatically removed from SELECT.  Use this
 function to repeatedly wait on a set of promises.
 
+When optional arg VANQUISH is non-nil, cancel all promises in
+SELECT other than the first that has resolved.
+
 Note: The promise returned by this function resolves to another
 promise, not that promise's result.  You will need to `aio-await'
 on it, or use `aio-result'."
   (let* ((result (aio-promise))
          (callback (lambda ()
                      (let ((promise (aio--queue-get (aref select 3))))
+		       (when vanquish
+			 (dolist (other-promise (aio-select-promises select))
+			   (when (not (eq promise other-promise))
+			     (aio-cancel other-promise))))
                        (aio-resolve result (lambda () promise))))))
     (prog1 result
       (if (aio--queue-empty-p (aref select 3))
           (setf (aref select 4) callback)
         (funcall callback)))))
+
+(defun aio-select-cancel (select &optional reason)
+  "Cancel all of the promises in SELECT."
+  (dolist (promise (aio-select-promises select))
+    (aio-cancel promise reason)))
 
 ;; Semaphores
 
