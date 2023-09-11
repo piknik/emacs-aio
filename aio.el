@@ -55,7 +55,8 @@ under")
 
 Promise results are wrapped in a function.  The result must be
 called (e.g. `funcall') in order to retrieve the value."
-  (cl-check-type promise aio-promise)
+  (unless (aio-promise-p promise)
+    (signal 'wrong-type-argument (list 'aio-promise-p promise)))
   (aref promise 1))
 
 (defsubst aio-promise-cancelled-p (promise)
@@ -63,7 +64,8 @@ called (e.g. `funcall') in order to retrieve the value."
 
 When non-nil, the result is a list corresponding to the arguments
 for `signal'"
-  (cl-check-type promise aio-promise)
+  (unless (aio-promise-p promise)
+    (signal 'wrong-type-argument (list 'aio-promise-p promise)))
   (aref promise 3))
 
 (defun aio-listen (promise callback)
