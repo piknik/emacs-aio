@@ -464,9 +464,7 @@ on it, or use `aio-result'."
          (callback (lambda ()
                      (let ((promise (aio--queue-get (aref select 3))))
 		       (when vanquish
-			 (dolist (other-promise (aio-select-promises select))
-			   (when (not (eq promise other-promise))
-			     (aio-cancel other-promise))))
+			 (aio-select-cancel select))
                        (aio-resolve result (lambda () promise))))))
     (prog1 result
       (if (aio--queue-empty-p (aref select 3))
