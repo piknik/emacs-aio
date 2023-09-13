@@ -42,7 +42,21 @@
 under")
 
 (defun aio-promise ()
-  "Create a new promise object."
+  "Create a new promise object.
+
+The returned object is a record containing the following
+elements:
+
+idx 0 - The name of the record: 'aio-promise
+
+idx 1 - The resolved result of the promise which is a function
+returning the value or signal. If set during execution of the
+promise, it is considered a signal thrown to this promise, so a
+return from `aio-await' will call this result to invoke the signal.
+
+idx 2 - The callbacks waiting on this promise.
+
+idx 3 - A promise that this promise is waiting on."
   (record 'aio-promise nil () nil))
 
 (defsubst aio-promise-p (object)
@@ -59,11 +73,8 @@ called (e.g. `funcall') in order to retrieve the value."
     (signal 'wrong-type-argument (list 'aio-promise-p promise)))
   (aref promise 1))
 
-(defsubst aio-promise-cancelled-p (promise)
-  "Return non-nil if PROMISE is cancelled.
-
-When non-nil, the result is a list corresponding to the arguments
-for `signal'"
+(defsubst aio-promise-waiting-on (promise)
+  "Return the promise that PROMISE is waiting on."
   (unless (aio-promise-p promise)
     (signal 'wrong-type-argument (list 'aio-promise-p promise)))
   (aref promise 3))
@@ -136,10 +147,14 @@ async functions using this macro.
 
 This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
-  `(let ((result (funcall (iter-yield ,expr))))
-     (when-let* ((signal-args (aio-promise-cancelled-p aio-current-promise)))
-       (signal (car signal-args) (cdr signal-args)))
-     result))
+  `(progn
+     (setf (aref aio-current-promise 3) ,expr)
+     (prog1
+	 (let ((result (funcall (iter-yield ,expr))))
+	   (when-let* ((signal-result (aio-result aio-current-promise)))
+	     (funcall signal-result))
+	   result)
+       (setf (aref aio-current-promise 3) nil))))
 
 (defmacro aio-lambda (arglist &rest body)
   "Like `lambda', but defines an async function.
@@ -205,14 +220,21 @@ ARGLIST and BODY."
     (accept-process-output))
   (funcall (aio-result promise)))
 
+(defun aio-signal (promise error-symbol data)
+  "Send a (signal ERROR-SYMBOL DATA) to the promise waited on by
+PROMISE, or the current PROMISE, if no other promise is being
+waited for, recursively."
+  (unless (aio-result promise)
+    (if-let* ((next-promise (aio-promise-waiting-on promise)))
+	(aio-signal next-promise error-symbol data)
+      (aio-resolve promise (lambda () (signal error-symbol data))))))
+
 (defun aio-cancel (promise &optional reason)
   "Attempt to cancel PROMISE, returning non-nil if successful.
 
 All awaiters will receive an `aio-cancel' signal.
 Optional argument REASON is used as error data for the signal."
-  (unless (aio-result promise)
-    (setf (aref promise 3) (list 'aio-cancel reason))
-    (aio-resolve promise (lambda () (signal 'aio-cancel reason)))))
+  (aio-signal promise 'aio-cancel reason))
 
 (defmacro aio-with-async (&rest body)
   "Evaluate BODY asynchronously as if it was inside `aio-lambda'.
