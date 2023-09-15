@@ -56,8 +56,11 @@ return from `aio-await' will call this result to invoke the signal.
 
 idx 2 - The callbacks waiting on this promise.
 
-idx 3 - A promise that this promise is waiting on."
-  (record 'aio-promise nil () nil))
+idx 3 - A list of promises that were created by this promise."
+  (let ((promise (record 'aio-promise nil () nil)))
+    (prog1 promise
+      (when aio-current-promise
+	(push promise (aref aio-current-promise 3))))))
 
 (defsubst aio-promise-p (object)
   "Return non-nil if OBJECT is a promise."
@@ -147,14 +150,10 @@ async functions using this macro.
 
 This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
-  `(progn
-     (setf (aref aio-current-promise 3) ,expr)
-     (prog1
-	 (let ((result (funcall (iter-yield ,expr))))
-	   (when-let* ((signal-result (aio-result aio-current-promise)))
-	     (funcall signal-result))
-	   result)
-       (setf (aref aio-current-promise 3) nil))))
+  `(let ((result (funcall (iter-yield ,expr))))
+     (when-let* ((signal-result (aio-result aio-current-promise)))
+       (funcall signal-result))
+     result))
 
 (defmacro aio-lambda (arglist &rest body)
   "Like `lambda', but defines an async function.
@@ -221,13 +220,12 @@ ARGLIST and BODY."
   (funcall (aio-result promise)))
 
 (defun aio-signal (promise error-symbol data)
-  "Send a (signal ERROR-SYMBOL DATA) to the promise waited on by
-PROMISE, or the current PROMISE, if no other promise is being
-waited for, recursively."
+  "Resolves PROMISE and all of the promises it has created by
+signalling ERROR-SYMBOL and DATA."
   (unless (aio-result promise)
-    (if-let* ((next-promise (aio-promise-waiting-on promise)))
-	(aio-signal next-promise error-symbol data)
-      (aio-resolve promise (lambda () (signal error-symbol data))))))
+    (dolist (sub-promise (aref promise 3))
+      (aio-signal sub-promise error-symbol data))
+    (aio-resolve promise (lambda () (signal error-symbol data)))))
 
 (defun aio-cancel (promise &optional reason)
   "Attempt to cancel PROMISE, returning non-nil if successful.
