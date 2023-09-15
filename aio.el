@@ -155,6 +155,11 @@ This macro can only be used inside an async function, either
        (funcall signal-result))
      result))
 
+(defmacro aio-await* (expr)
+  "See `aio-await' for the behavior of this function. This macro will
+not call the result/signal of this promise if it exists."
+  `(funcall (iter-yield ,expr)))
+
 (defmacro aio-lambda (arglist &rest body)
   "Like `lambda', but defines an async function.
 
