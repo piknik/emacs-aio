@@ -92,7 +92,7 @@ seconds to wait between calls to `accept-process-output'"
 	 result)
     (unless
 	(with-local-quit
-	  (while (and (not (aio-promise-cancelled-p aio-current-promise))
+	  (while (and (not (aio-result aio-current-promise))
 		      (null result)
 		      (and process (process-live-p process))
 		      (or (null seconds)
