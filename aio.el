@@ -77,12 +77,6 @@ called (e.g. `funcall') in order to retrieve the value."
     (signal 'wrong-type-argument (list 'aio-promise-p promise)))
   (aref promise 1))
 
-(defsubst aio-promise-waiting-on (promise)
-  "Return the promise that PROMISE is waiting on."
-  (unless (aio-promise-p promise)
-    (signal 'wrong-type-argument (list 'aio-promise-p promise)))
-  (aref promise 3))
-
 (defun aio-listen (promise callback)
   "Add CALLBACK to PROMISE.
 
@@ -153,7 +147,7 @@ async functions using this macro.
 
 This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
-  `(let ((result (funcall (iter-yield ,expr))))
+  `(let ((result (aio-await* ,expr)))
      (when-let* ((signal-result (aio-result aio-current-promise)))
        (funcall signal-result))
      result))
