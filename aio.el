@@ -35,6 +35,7 @@
 
 ;; Register new error types
 (define-error 'aio-cancel "Promise was canceled")
+(define-error 'aio-parent-error "Parent promise experienced an uncaught error")
 (define-error 'aio-timeout "Timeout was reached")
 
 (defvar aio-current-promise nil
@@ -131,13 +132,15 @@ promise and rethrown in the promise's listeners."
            (debug (form body)))
   (cl-assert (eq lexical-binding t))
   `(aio-resolve ,promise
-                (condition-case error
-                    (let ((result
-			   (let ((aio-current-promise ,promise))
-			     ,@body)))
-                      (lambda () result))
-                  (error (lambda ()
-                           (signal (car error) (cdr error)))))))
+	     (let ((aio-current-promise ,promise))
+	       (condition-case error
+		   (let ((result ,(macroexp-progn body)))
+		     (lambda () result))
+		 (error
+		  (dolist (sub-promise (aref promise 3))
+		    (aio-signal sub-promise 'aio-parent-error nil))
+		  (lambda ()
+		    (signal (car error) (cdr error))))))))
 
 (defmacro aio-await (expr)
   "If EXPR evaluates to a promise, pause until the promise is resolved.
