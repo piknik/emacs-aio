@@ -131,7 +131,7 @@ promise and rethrown in the promise's listeners."
 		   (let ((result ,(macroexp-progn body)))
 		     (lambda () result))
 		 (error
-		  (dolist (sub-promise (aref promise 3))
+		  (dolist (sub-promise (aref ,promise 3))
 		    (aio-signal sub-promise 'aio-parent-error nil))
 		  (lambda ()
 		    (signal (car error) (cdr error))))))))
