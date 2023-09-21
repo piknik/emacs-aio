@@ -85,7 +85,10 @@ process.
 
 When JUST-THIS-ONE is non-nil, it is always used as 't
 MAX-WAIT-TIME is a floating-point value specifying the number of
-seconds to wait between calls to `accept-process-output'"
+seconds to wait between calls to `accept-process-output'.
+
+WARNING: If SECONDS is nil, this function may return nil even if
+PROCESS still has data to be read."
   (let* ((max-wait-time (or max-wait-time 1.0))
 	 (start-time (car (time-convert nil 1000)))
 	 (time-difference 0)
