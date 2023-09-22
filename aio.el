@@ -178,12 +178,15 @@ ARGLIST and BODY."
     `(lambda (&rest ,args)
        ,@(car split-body)
        (let* ((,promise (aio-promise))
-              (iter (apply (iter2-lambda ,arglist
-                             (aio-with-promise ,promise
-                               ,@(cdr split-body)))
-                           ,args)))
-         (prog1 ,promise
-           (aio--step iter ,promise nil))))))
+              (iter (iter2-lambda ,arglist
+		      (aio-with-promise ,promise
+			  ,@(cdr split-body)))))
+	 (run-at-time
+	  0 nil
+	  (lambda ()
+	    (aio--step (apply iter ,args)
+		       ,promise nil)))
+	 ,promise))))
 
 (defmacro aio-defun (name arglist &rest body)
   "Like `aio-lambda' but gives the function a NAME like `defun'.
