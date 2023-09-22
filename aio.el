@@ -54,13 +54,15 @@ returning the value or signal. If set during execution of the
 promise, it is considered a signal thrown to this promise, so a
 return from `aio-await' will call this result to invoke the signal.
 
-idx 2 - The callbacks waiting on this promise."
-  (record 'aio-promise nil ()))
+idx 2 - The callbacks waiting on this promise.
+
+idx 3 - The object being awaited on through this promise"
+  (record 'aio-promise nil () nil))
 
 (defsubst aio-promise-p (object)
   "Return non-nil if OBJECT is a promise."
   (and (eq 'aio-promise (type-of object))
-       (= 3 (length object))))
+       (= 4 (length object))))
 
 (defsubst aio-result (promise)
   "Return the result of PROMISE, or nil if it is unresolved.
@@ -83,6 +85,7 @@ scheduled for the next event loop turn."
 	 (lambda (result)
 	   (condition-case err
 	       (funcall callback result)
+	     (aio-cancel)
 	     (error
 	      (message "AIO uncaught error: %S" err))))
 	 result)
@@ -106,7 +109,9 @@ value or rethrows a signal."
 	 (lambda (value-function)
 	   (condition-case err
 	       (funcall callback value-function)
-	     (error (message "AIO uncaught error: %S" err))))
+	     (aio-cancel)
+	     (error
+	      (message "AIO uncaught error: %S" err))))
 	 value-function)))))
 
 (defun aio--step (iter promise yield-result)
@@ -152,10 +157,13 @@ async functions using this macro.
 
 This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
-  `(let ((result (aio-await* ,expr)))
-     (when-let* ((signal-result (aio-result aio-current-promise)))
-       (funcall signal-result))
-     result))
+  `(progn
+     (setf (aref aio-current-promise 3) ,expr)
+     (let ((result (aio-await* ,expr)))
+       (setf (aref aio-current-promise 3) nil)
+       (when-let* ((signal-result (aio-result aio-current-promise)))
+	 (funcall signal-result))
+       result)))
 
 (defmacro aio-await* (expr)
   "See `aio-await' for the behavior of this function. This macro will
@@ -234,7 +242,10 @@ ARGLIST and BODY."
   "Resolves PROMISE and all of the promises it has created by
 signalling ERROR-SYMBOL and DATA."
   (unless (aio-result promise)
-    (aio-resolve promise (lambda () (signal error-symbol data)))))
+    (let ((value-function (lambda () (signal error-symbol data))))
+      (aio-resolve promise value-function)
+      (when-let* ((awaiting-on (aref promise 3)))
+	(aio-resolve awaiting-on value-function)))))
 
 (defun aio-cancel (promise &optional reason)
   "Attempt to cancel PROMISE, returning non-nil if successful.
@@ -287,8 +298,16 @@ a chain of promise-yielding promises."
 
 (aio-defun aio-all (promises)
   "Return a promise that resolves when all PROMISES are resolved."
-  (dolist (promise promises)
-    (aio-await promise)))
+  (condition-case outer-error
+      (dolist (promise promises)
+	(condition-case inner-error
+	    (aio-await promise)
+	  (aio-cancel (signal (car inner-error) (cdr inner-error)))
+	  (error)))
+    (aio-cancel
+     (dolist (promise promises)
+       (aio-cancel promise (cdr outer-error)))
+     (signal (car outer-error) (cdr outer-error)))))
 
 (defun aio-catch (promise)
   "Return a new promise that wraps PROMISE but will never signal.
