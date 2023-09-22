@@ -157,13 +157,14 @@ async functions using this macro.
 
 This macro can only be used inside an async function, either
 `aio-lambda' or `aio-defun'."
-  `(progn
-     (setf (aref aio-current-promise 3) ,expr)
-     (let ((result (aio-await* ,expr)))
-       (setf (aref aio-current-promise 3) nil)
-       (when-let* ((signal-result (aio-result aio-current-promise)))
-	 (funcall signal-result))
-       result)))
+  (let ((expr-symbol (make-symbol "expr")))
+    `(let ((,expr-symbol ,expr))
+       (setf (aref aio-current-promise 3) ,expr-symbol)
+       (let ((result (aio-await* ,expr-symbol)))
+	 (setf (aref aio-current-promise 3) nil)
+	 (when-let* ((signal-result (aio-result aio-current-promise)))
+	   (funcall signal-result))
+	 result))))
 
 (defmacro aio-await* (expr)
   "See `aio-await' for the behavior of this function. This macro will
