@@ -212,9 +212,10 @@ ARGLIST and BODY."
 
 (defun aio-wait-for (promise)
   "Synchronously wait for PROMISE, blocking the current thread."
-  (while (null (aio-result promise))
-    (accept-process-output))
-  (funcall (aio-result promise)))
+  (with-local-quit
+    (while (null (aio-result promise))
+      (accept-process-output))
+    (funcall (aio-result promise))))
 
 (defun aio-signal (promise error-symbol data)
   "Resolves PROMISE and all of the promises it has created by
