@@ -35,7 +35,6 @@
 
 ;; Register new error types
 (define-error 'aio-cancel "Promise was canceled")
-(define-error 'aio-parent-error "Parent promise experienced an uncaught error")
 (define-error 'aio-timeout "Timeout was reached")
 
 (defvar aio-current-promise nil
@@ -55,18 +54,13 @@ returning the value or signal. If set during execution of the
 promise, it is considered a signal thrown to this promise, so a
 return from `aio-await' will call this result to invoke the signal.
 
-idx 2 - The callbacks waiting on this promise.
-
-idx 3 - A list of promises that were created by this promise."
-  (let ((promise (record 'aio-promise nil () nil)))
-    (prog1 promise
-      (when aio-current-promise
-	(push promise (aref aio-current-promise 3))))))
+idx 2 - The callbacks waiting on this promise."
+  (record 'aio-promise nil ()))
 
 (defsubst aio-promise-p (object)
   "Return non-nil if OBJECT is a promise."
   (and (eq 'aio-promise (type-of object))
-       (= 4 (length object))))
+       (= 3 (length object))))
 
 (defsubst aio-result (promise)
   "Return the result of PROMISE, or nil if it is unresolved.
@@ -131,8 +125,6 @@ promise and rethrown in the promise's listeners."
 		   (let ((result ,(macroexp-progn body)))
 		     (lambda () result))
 		 (error
-		  (dolist (sub-promise (aref ,promise 3))
-		    (aio-signal sub-promise 'aio-parent-error nil))
 		  (lambda ()
 		    (signal (car error) (cdr error))))))))
 
@@ -228,8 +220,6 @@ ARGLIST and BODY."
   "Resolves PROMISE and all of the promises it has created by
 signalling ERROR-SYMBOL and DATA."
   (unless (aio-result promise)
-    (dolist (sub-promise (aref promise 3))
-      (aio-signal sub-promise error-symbol data))
     (aio-resolve promise (lambda () (signal error-symbol data)))))
 
 (defun aio-cancel (promise &optional reason)
