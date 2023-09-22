@@ -78,7 +78,14 @@ If the promise has already been resolved, the callback will be
 scheduled for the next event loop turn."
   (let ((result (aio-result promise)))
     (if result
-        (run-at-time 0 nil callback result)
+        (run-at-time
+	 0 nil
+	 (lambda (result)
+	   (condition-case err
+	       (funcall callback result)
+	     (error
+	      (message "AIO uncaught error: %S" err))))
+	 result)
       (push callback (aref promise 2)))))
 
 (defun aio-resolve (promise value-function)
@@ -94,7 +101,13 @@ value or rethrows a signal."
       (setf (aref promise 1) value-function
             (aref promise 2) ())
       (dolist (callback callbacks)
-        (run-at-time 0 nil callback value-function)))))
+        (run-at-time
+	 0 nil
+	 (lambda (value-function)
+	   (condition-case err
+	       (funcall callback value-function)
+	     (error (message "AIO uncaught error: %S" err))))
+	 value-function)))))
 
 (defun aio--step (iter promise yield-result)
   "Advance ITER to the next promise.
