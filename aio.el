@@ -236,7 +236,7 @@ ARGLIST and BODY."
   "Synchronously wait for PROMISE, blocking the current thread."
   (with-local-quit
     (while (null (aio-result promise))
-      (accept-process-output))
+      (accept-process-output nil 0.01))
     (funcall (aio-result promise))))
 
 (defun aio-signal (promise error-symbol data)
