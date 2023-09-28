@@ -87,7 +87,7 @@ scheduled for the next event loop turn."
 	       (funcall callback result)
 	     (aio-cancel)
 	     (error
-	      (message "AIO uncaught error: %S" err))))
+	      (message "(listen) AIO uncaught error: %S" err))))
 	 result)
       (push callback (aref promise 2)))))
 
@@ -111,7 +111,7 @@ value or rethrows a signal."
 	       (funcall callback value-function)
 	     (aio-cancel)
 	     (error
-	      (message "AIO uncaught error: %S" err))))
+	      (message "(resolve) AIO uncaught error: %S" err))))
 	 value-function)))))
 
 (defun aio--step (iter promise yield-result)
@@ -160,11 +160,10 @@ This macro can only be used inside an async function, either
   (let ((expr-symbol (make-symbol "expr")))
     `(let ((,expr-symbol ,expr))
        (setf (aref aio-current-promise 3) ,expr-symbol)
-       (let ((result (aio-await* ,expr-symbol)))
-	 (setf (aref aio-current-promise 3) nil)
+       (prog1 (aio-await* ,expr-symbol)
 	 (when-let* ((signal-result (aio-result aio-current-promise)))
 	   (funcall signal-result))
-	 result))))
+	 (setf (aref aio-current-promise 3) nil)))))
 
 (defmacro aio-await* (expr)
   "See `aio-await' for the behavior of this function. This macro will
@@ -198,8 +197,11 @@ ARGLIST and BODY."
 	 (run-at-time
 	  0 nil
 	  (lambda ()
-	    (aio--step (apply iter ,args)
-		       ,promise nil)))
+	    (condition-case err
+		(aio--step (apply iter ,args)
+			,promise nil)
+	      (error
+	       (message "(step) AIO uncaught error: %S" err)))))
 	 ,promise))))
 
 (defmacro aio-defun (name arglist &rest body)
